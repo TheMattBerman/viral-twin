@@ -4,7 +4,7 @@
 
 Viral Twin analyzes a TikTok video, extracts what makes it work (pacing, hooks, camera angles, motion), then generates a new video with your brand's look—preserving the viral psychology while creating something original.
 
-Built with n8n, FAL AI, and Google's Gemini.
+Built with n8n, FAL AI, Scrapecreators and Google's Gemini.
 
 ---
 
@@ -322,11 +322,13 @@ MIT License - Use it, modify it, build on it.
 
 ## Credits
 
-Built by [Big Players](https://bigplayers.beehiiv.com) - Stealing billion-dollar growth strategies so you don't have to.
+Built by [Big Players](https://bigplayers.cp) - Stealing billion-dollar growth strategies so you don't have to.
+Follow on [X](https://x.com/themattberman.com) 
 
 **Stack:**
 
 - [n8n](https://n8n.io) - Workflow automation
+- [Scrapcreators](https://scrapecreators.com) - Workflow automation
 - [FAL AI](https://fal.ai) - Image/video generation infrastructure
 - [Kling](https://klingai.com) - Video generation model
 - [Google Gemini](https://deepmind.google/technologies/gemini/) - Vision analysis and prompt generation
