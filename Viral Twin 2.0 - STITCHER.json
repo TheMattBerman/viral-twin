@@ -1,0 +1,775 @@
+{
+  "name": "Viral Twin 2.0 - STITCHER",
+  "nodes": [
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "id": "acb8aa5c-d0ad-4c3c-971e-006993cd02eb",
+      "name": "Receive Clips Data",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        288,
+        16
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "version": 2,
+            "caseSensitive": true
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "1",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              },
+              "leftValue": "={{ $json.ready_for_stitching }}"
+            },
+            {
+              "id": "2",
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              },
+              "leftValue": "={{ $json.video_urls.length }}",
+              "rightValue": 0
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "ed9aab3a-5ecb-4ba0-afe0-2c89739b25eb",
+      "name": "Has Clips?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        512,
+        16
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "1",
+              "name": "final_video_url",
+              "value": "",
+              "type": "string"
+            },
+            {
+              "id": "2",
+              "name": "stitch_status",
+              "value": "skipped_no_clips",
+              "type": "string"
+            },
+            {
+              "id": "3",
+              "name": "drive_url",
+              "value": "",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "aea8c610-da65-422c-afc4-3230181ff79f",
+      "name": "No Clips - Skip Stitching",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        736,
+        176
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "version": 2,
+            "caseSensitive": true
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "1",
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              },
+              "leftValue": "={{ $json.video_urls.length }}",
+              "rightValue": 1
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "ac42d5e6-85d7-4519-aef9-5354a2cd5a83",
+      "name": "Single or Multiple Clips?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        736,
+        16
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const originalData = items[0].json;\n\nreturn [{\n  json: {\n    // Core identifiers\n    video_id: originalData.video_id,\n    \n    // Original TikTok data\n    original_url: originalData.original_url || '',\n    author: originalData.author || '',\n    description: originalData.description || '',\n    \n    // Analysis data\n    vibe_check: originalData.vibe_check || {},\n    character_bible: originalData.character_bible || {},\n    archetype: originalData.archetype || {},\n    brand_color: originalData.brand_color || '#10B981',\n    \n    // Final video (single clip = first video URL)\n    final_video_url: originalData.video_urls[0] || '',\n    stitch_status: 'single_clip',\n    clip_count: 1,\n    total_duration_seconds: 10,\n    clips: originalData.clips || [],\n    stitched_at: new Date().toISOString()\n  }\n}];"
+      },
+      "id": "f4faa633-632e-47e2-a76f-d43d598d02ac",
+      "name": "Single Clip - No Stitch Needed",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        960,
+        176
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://queue.fal.run/fal-ai/ffmpeg-api/merge-videos",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ video_urls: $json.video_urls }) }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "ff660755-da1d-4e7c-b5c0-c662cd5dc6bb",
+      "name": "FAL Merge Videos",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        960,
+        16
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "Mus4CDRMALrvfn2u",
+          "name": "FAL"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "id": "869f1464-2b9b-418e-bcf4-c852bc193a39",
+      "name": "Wait 30s for Merge",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        1168,
+        16
+      ],
+      "webhookId": "dbfb7586-414f-4225-b46d-28ec3e122300"
+    },
+    {
+      "parameters": {
+        "url": "={{ $('FAL Merge Videos').item.json.response_url }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 60000
+        }
+      },
+      "id": "96070ec2-feb7-4f88-bc0c-26b6f072a116",
+      "name": "Poll Merge Status",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1392,
+        16
+      ],
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "Mus4CDRMALrvfn2u",
+          "name": "FAL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "version": 2,
+            "caseSensitive": true
+          },
+          "combinator": "or",
+          "conditions": [
+            {
+              "id": "1",
+              "operator": {
+                "type": "string",
+                "operation": "exists",
+                "singleValue": true
+              },
+              "leftValue": "={{ $json.video?.url }}"
+            },
+            {
+              "id": "2",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              },
+              "leftValue": "={{ $json.status }}",
+              "rightValue": "COMPLETED"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "ed2a943e-0ad5-4337-a908-9b6aea2883d8",
+      "name": "Merge Done?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1616,
+        16
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "b4f558f3-fd96-439d-8ac9-8bdfc804dbef",
+      "name": "Wait 30s More",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        1840,
+        176
+      ],
+      "webhookId": "f7acdd1a-7e47-4fb5-8440-6fb4849fbbd5"
+    },
+    {
+      "parameters": {
+        "url": "={{ $('FAL Merge Videos').item.json.response_url }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 60000
+        }
+      },
+      "id": "48936eb8-67e5-42b1-811c-b0de99d232f1",
+      "name": "Poll Merge Again",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2048,
+        176
+      ],
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "Mus4CDRMALrvfn2u",
+          "name": "FAL"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "id": "2cc3463f-63c4-47d1-a44f-715896646a41",
+      "name": "Merge Stitch Results",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [
+        2272,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const mergeResult = items[0].json;\nconst originalData = $('Receive Clips Data').item.json;\n\n// Extract final video URL - check multiple possible locations\nlet finalVideoUrl = '';\nif (mergeResult.video?.url) {\n  finalVideoUrl = mergeResult.video.url;\n} else if (mergeResult.url) {\n  finalVideoUrl = mergeResult.url;\n} else if (mergeResult.output?.url) {\n  finalVideoUrl = mergeResult.output.url;\n} else if (typeof mergeResult.video === 'string') {\n  finalVideoUrl = mergeResult.video;\n}\n\n// Calculate total duration\nconst clipCount = originalData.successful_clips || originalData.video_urls?.length || 0;\nconst totalDuration = clipCount * 10;\n\nreturn [{\n  json: {\n    // Core identifiers\n    video_id: originalData.video_id,\n    \n    // Original TikTok data (pass through from earlier)\n    original_url: originalData.original_url || '',\n    author: originalData.author || '',\n    description: originalData.description || '',\n    \n    // Analysis data\n    vibe_check: originalData.vibe_check || {},\n    character_bible: originalData.character_bible || {},\n    archetype: originalData.archetype || {},\n    brand_color: originalData.brand_color || '#10B981',\n    \n    // Final video\n    final_video_url: finalVideoUrl,\n    stitch_status: finalVideoUrl ? 'completed' : 'failed',\n    clip_count: clipCount,\n    total_duration_seconds: totalDuration,\n    clips: originalData.clips || [],\n    stitched_at: new Date().toISOString()\n  }\n}];"
+      },
+      "id": "d0a9fe06-bf37-4d81-ae22-869bc315889a",
+      "name": "Package Final Video",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2496,
+        80
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "92fa1a56-63ff-4eb9-acc9-38d090e85845",
+      "name": "Merge All Paths",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [
+        2720,
+        96
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "version": 2,
+            "caseSensitive": true
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "1",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              },
+              "leftValue": "={{ $json.final_video_url }}",
+              "rightValue": "http"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "4714ff1e-86ae-45d5-a5dd-00143c0fcd92",
+      "name": "Has Video URL?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2928,
+        96
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.final_video_url }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file"
+            }
+          },
+          "timeout": 120000
+        }
+      },
+      "id": "05936458-a32e-4a80-ae3d-ea3c4ee2f1fa",
+      "name": "Download Video",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3152,
+        16
+      ]
+    },
+    {
+      "parameters": {
+        "name": "=viral-twin-{{ $json.video_id }}-{{ $now.format('yyyy-MM-dd-HHmmss') }}.mp4",
+        "driveId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "My Drive"
+        },
+        "folderId": {
+          "__rl": true,
+          "value": "1KK9y0svr_oBUOORchLaqqYXzJrPIUCW2",
+          "mode": "list",
+          "cachedResultName": "Big Players TikTok Clone",
+          "cachedResultUrl": "https://drive.google.com/drive/folders/1KK9y0svr_oBUOORchLaqqYXzJrPIUCW2"
+        },
+        "options": {}
+      },
+      "id": "557ca56c-b9d2-47fd-a0a3-622f2b8a5274",
+      "name": "Upload to Google Drive",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        3376,
+        16
+      ],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "c1lX68Ne53WW1ODn",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "share",
+        "fileId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $json.id }}"
+        },
+        "permissionsUi": {
+          "permissionsValues": {
+            "role": "reader",
+            "type": "anyone"
+          }
+        },
+        "options": {}
+      },
+      "id": "7ea7e04b-60da-45e5-9b45-e1144a5e5b24",
+      "name": "Get Shareable Link",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        3600,
+        16
+      ],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "c1lX68Ne53WW1ODn",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const originalData = $('Merge All Paths').item.json;\nconst driveUpload = $('Upload to Google Drive').item.json;\n\nreturn [{\n  json: {\n    // Core identifiers\n    video_id: originalData.video_id,\n    \n    // Original TikTok data\n    original_url: originalData.original_url || '',\n    author: originalData.author || '',\n    description: originalData.description || '',\n    \n    // Analysis data\n    vibe_check: originalData.vibe_check || {},\n    character_bible: originalData.character_bible || {},\n    archetype: originalData.archetype || {},\n    brand_color: originalData.brand_color || '#10B981',\n    \n    // Video URLs\n    final_video_url: originalData.final_video_url,\n    drive_file_id: driveUpload.id,\n    drive_url: `https://drive.google.com/file/d/${driveUpload.id}/view`,\n    drive_download_url: `https://drive.google.com/uc?export=download&id=${driveUpload.id}`,\n    \n    // Status\n    stitch_status: originalData.stitch_status,\n    clip_count: originalData.clip_count,\n    total_duration_seconds: originalData.total_duration_seconds,\n    clips: originalData.clips || [],\n    stitched_at: originalData.stitched_at\n  }\n}];"
+      },
+      "id": "5dbb92f5-7549-49ff-b3c3-2d65a277ddca",
+      "name": "Set Drive URL",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3808,
+        16
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const originalData = items[0].json;\n\nreturn [{\n  json: {\n    // Core identifiers\n    video_id: originalData.video_id,\n    \n    // Original TikTok data\n    original_url: originalData.original_url || '',\n    author: originalData.author || '',\n    description: originalData.description || '',\n    \n    // Analysis data\n    vibe_check: originalData.vibe_check || {},\n    character_bible: originalData.character_bible || {},\n    archetype: originalData.archetype || {},\n    brand_color: originalData.brand_color || '#10B981',\n    \n    // Video URLs (empty since no video)\n    final_video_url: originalData.final_video_url || '',\n    drive_file_id: '',\n    drive_url: '',\n    drive_download_url: '',\n    \n    // Status\n    stitch_status: originalData.stitch_status || 'failed',\n    clip_count: originalData.clip_count || 0,\n    total_duration_seconds: originalData.total_duration_seconds || 0,\n    clips: originalData.clips || [],\n    stitched_at: originalData.stitched_at || new Date().toISOString()\n  }\n}];"
+      },
+      "id": "7707261c-9cab-430f-a49c-4d55a08c2642",
+      "name": "Skip Upload - No Video",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3152,
+        208
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "39e58405-46e8-496f-b743-fad0f68b6eb5",
+      "name": "Merge Upload Paths",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [
+        4032,
+        96
+      ]
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "7VStPBFKVoALo7bA",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/7VStPBFKVoALo7bA",
+          "cachedResultName": "Viral Twin 2.0 - LOGGER"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "id": "4f74b1e6-2db0-41c2-a483-263db3224646",
+      "name": "Call Logger",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        4256,
+        96
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Receive Clips Data": {
+      "main": [
+        [
+          {
+            "node": "Has Clips?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Clips?": {
+      "main": [
+        [
+          {
+            "node": "Single or Multiple Clips?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No Clips - Skip Stitching",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Single or Multiple Clips?": {
+      "main": [
+        [
+          {
+            "node": "FAL Merge Videos",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Single Clip - No Stitch Needed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "FAL Merge Videos": {
+      "main": [
+        [
+          {
+            "node": "Wait 30s for Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait 30s for Merge": {
+      "main": [
+        [
+          {
+            "node": "Poll Merge Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Poll Merge Status": {
+      "main": [
+        [
+          {
+            "node": "Merge Done?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Done?": {
+      "main": [
+        [
+          {
+            "node": "Merge Stitch Results",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Wait 30s More",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait 30s More": {
+      "main": [
+        [
+          {
+            "node": "Poll Merge Again",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Poll Merge Again": {
+      "main": [
+        [
+          {
+            "node": "Merge Stitch Results",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge Stitch Results": {
+      "main": [
+        [
+          {
+            "node": "Package Final Video",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Package Final Video": {
+      "main": [
+        [
+          {
+            "node": "Merge All Paths",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Single Clip - No Stitch Needed": {
+      "main": [
+        [
+          {
+            "node": "Merge All Paths",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge All Paths": {
+      "main": [
+        [
+          {
+            "node": "Has Video URL?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Video URL?": {
+      "main": [
+        [
+          {
+            "node": "Download Video",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Skip Upload - No Video",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download Video": {
+      "main": [
+        [
+          {
+            "node": "Upload to Google Drive",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upload to Google Drive": {
+      "main": [
+        [
+          {
+            "node": "Get Shareable Link",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Shareable Link": {
+      "main": [
+        [
+          {
+            "node": "Set Drive URL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Drive URL": {
+      "main": [
+        [
+          {
+            "node": "Merge Upload Paths",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Skip Upload - No Video": {
+      "main": [
+        [
+          {
+            "node": "Merge Upload Paths",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge Upload Paths": {
+      "main": [
+        [
+          {
+            "node": "Call Logger",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "1221cceb-e541-438a-bbfb-03b5a92d0b22",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "5f21038f187f7ddf12e940bb55bc64eb117a28b98f8b5539845218f69f7a8aa9"
+  },
+  "id": "OZXs4K8Y049NijJQ",
+  "tags": []
+}

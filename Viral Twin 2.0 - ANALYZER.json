@@ -1,0 +1,591 @@
+{
+  "name": "Viral Twin 2.0 - ANALYZER",
+  "nodes": [
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "id": "3c75d2ca-76d0-41bd-81e1-37d05d9df827",
+      "name": "Receive Video Data",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -1328,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Calculate how many 10-second segments we need\nconst input = items[0].json;\nconst durationSeconds = input.duration_seconds || 30;\n\n// Each segment is 10 seconds (Kling max per generation)\nconst segmentDuration = 10;\nconst maxSegments = 6; // Cap at 60 seconds output\n\nlet segmentCount = Math.ceil(durationSeconds / segmentDuration);\nsegmentCount = Math.min(segmentCount, maxSegments);\n\n// Calculate timestamps for each segment\nconst segments = [];\nfor (let i = 0; i < segmentCount; i++) {\n  const startTime = i * segmentDuration;\n  const endTime = Math.min((i + 1) * segmentDuration, durationSeconds);\n  segments.push({\n    index: i,\n    start_seconds: startTime,\n    end_seconds: endTime,\n    timestamp_range: `${formatTime(startTime)} - ${formatTime(endTime)}`,\n    duration: endTime - startTime\n  });\n}\n\nfunction formatTime(seconds) {\n  const mins = Math.floor(seconds / 60);\n  const secs = seconds % 60;\n  return `${mins}:${secs.toString().padStart(2, '0')}`;\n}\n\nreturn [{\n  json: {\n    ...input,\n    segment_count: segmentCount,\n    segments: segments,\n    total_output_duration: segmentCount * segmentDuration\n  }\n}];"
+      },
+      "id": "72dfd42b-ca09-412d-ac7f-88c94a72bb0b",
+      "name": "Calculate Segments",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1104,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.video_url }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file"
+            }
+          },
+          "timeout": 60000
+        }
+      },
+      "id": "f44eda7c-d616-4e73-82ed-b7e2e939cebe",
+      "name": "Download Video",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -880,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get the binary data from the HTTP request\nconst binaryData = items[0].binary?.data;\n\nif (!binaryData) {\n  throw new Error('No binary data found from video download');\n}\n\n// Get the base64 string and mime type\nconst base64String = binaryData.data;\nconst mimeType = binaryData.mimeType || 'video/mp4';\n\n// Create data URL for Gemini\nconst dataUrl = `data:${mimeType};base64,${base64String}`;\n\n// Get previous node data\nconst prevData = $('Calculate Segments').item.json;\n\nreturn [{\n  json: {\n    ...prevData,\n    video_base64_url: dataUrl,\n    video_size_mb: (base64String.length * 0.75 / 1024 / 1024).toFixed(2)\n  }\n}];"
+      },
+      "id": "ddff2934-b03a-4468-b474-96504b775969",
+      "name": "Convert to Base64",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -656,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://openrouter.ai/api/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "HTTP-Referer",
+              "value": "https://emeralddigital.dev"
+            },
+            {
+              "name": "X-Title",
+              "value": "Viral Twin Analyzer"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: 'google/gemini-2.5-flash-preview-09-2025', messages: [{ role: 'system', content: `ROLE: Viral Video Forensics Analyst\n\nTASK: Analyze this TikTok video and provide:\n1. A comprehensive VIBE CHECK (psychological/audio analysis)\n2. A CHARACTER BIBLE for consistent recreation\n3. A SEGMENT-BY-SEGMENT breakdown of what happens\n\nThe user wants to recreate this video in ${$json.segment_count} segments of ~10 seconds each.\n\nARCHETYPE TO APPLY: ${$json.archetype.name}\nArchetype Description: ${$json.archetype.description}\nArchetype Visual Cues: ${$json.archetype.visual_cues}\nArchetype Energy: ${$json.archetype.energy}\n\nBRAND COLOR: ${$json.brand_color}\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\nOUTPUT FORMAT (JSON):\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n{\n  \"vibe_check\": {\n    \"audio_energy\": \"describe the audio/music vibe\",\n    \"pacing\": \"fast/medium/slow and why\",\n    \"emotional_arc\": \"what emotions does this video trigger and how\",\n    \"viral_hooks\": [\"list the psychological hooks that make this shareable\"],\n    \"tone\": \"funny/serious/educational/inspirational/etc\"\n  },\n  \"character_bible\": {\n    \"subject_type\": \"person/hands-only/object/scene/product\",\n    \"physical_description\": \"detailed description for consistent image generation - be specific about age, build, features if person\",\n    \"clothing_style\": \"specific clothing/accessories that should persist across segments\",\n    \"distinguishing_features\": \"unique identifiers to maintain consistency\",\n    \"environment\": {\n      \"setting_type\": \"kitchen/office/outdoor/studio/bedroom/etc\",\n      \"key_elements\": \"furniture, objects, props that appear\",\n      \"lighting\": \"natural/artificial, direction, quality\",\n      \"color_palette\": \"dominant colors in the scene\"\n    },\n    \"archetype_application\": \"how to apply the ${$json.archetype.name} archetype to this subject - specific visual and energy adjustments\",\n    \"brand_integration\": \"where/how to subtly integrate ${$json.brand_color} without disrupting the vibe\",\n    \"consistency_anchors\": [\"list 5-7 specific details that MUST stay consistent across all segments\"]\n  },\n  \"segments\": [\n    {\n      \"index\": 0,\n      \"time_range\": \"0:00 - 0:10\",\n      \"description\": \"what happens in this segment - actions, movements, key moments\",\n      \"camera\": \"camera angle, distance, movement\",\n      \"focal_point\": \"what the viewer should focus on\",\n      \"motion_description\": \"how things move - for video generation prompt\",\n      \"key_frame_description\": \"describe the ideal starting frame for this segment\"\n    }\n  ]\n}\n\nIMPORTANT:\n- Create exactly ${$json.segment_count} segment entries\n- Each segment should flow naturally into the next\n- Preserve the viral psychology while applying the archetype\n- Be specific enough for image generation prompts\n- Return ONLY valid JSON, no markdown` }, { role: 'user', content: [{ type: 'video_url', video_url: { url: $json.video_base64_url } }, { type: 'text', text: `Analyze this ${$json.duration_seconds}-second TikTok video. Break it into ${$json.segment_count} segments and provide the full analysis.` }] }], max_tokens: 4000, temperature: 0.3 }) }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 120000
+        }
+      },
+      "id": "75b52b92-b20e-4a1b-8599-e4fbf61d7db3",
+      "name": "Gemini Full Video Analysis",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -448,
+        112
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "FoHuYOrModyYssj3",
+          "name": "OpenRouter"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $('Convert to Base64').item.json;\nconst response = items[0].json;\n\n// Parse Gemini's response\nlet analysis;\ntry {\n  const content = response.choices[0].message.content;\n  // Clean potential markdown fencing\n  const cleaned = content.replace(/```json\\n?|```\\n?/g, '').trim();\n  analysis = JSON.parse(cleaned);\n} catch (e) {\n  throw new Error(`Failed to parse Gemini analysis: ${e.message}`);\n}\n\n// Validate required fields\nif (!analysis.vibe_check || !analysis.character_bible || !analysis.segments) {\n  throw new Error('Analysis missing required fields: vibe_check, character_bible, or segments');\n}\n\n// Ensure segment count matches\nif (analysis.segments.length !== input.segment_count) {\n  console.log(`Warning: Expected ${input.segment_count} segments, got ${analysis.segments.length}`);\n}\n\nreturn [{\n  json: {\n    video_id: input.video_id,\n    original_url: input.original_url,\n    author: input.author,\n    description: input.description,\n    duration_seconds: input.duration_seconds,\n    archetype: input.archetype,\n    brand_color: input.brand_color,\n    segment_count: input.segment_count,\n    segments: input.segments,\n    vibe_check: analysis.vibe_check,\n    character_bible: analysis.character_bible,\n    segment_analysis: analysis.segments,\n    source: input.source,\n    ingested_at: input.ingested_at\n  }\n}];"
+      },
+      "id": "71dc312d-ca9e-4041-bfc3-d40589d49666",
+      "name": "Parse Full Analysis",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -224,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://queue.fal.run/fal-ai/ffmpeg-api/extract-frame",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ video_url: $('Calculate Segments').item.json.video_url, frame_type: 'first' }) }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "d79b7f28-579f-4783-bd0a-54fc12fde787",
+      "name": "FAL Extract Hook Frame",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        0,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "Mus4CDRMALrvfn2u",
+          "name": "FAL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://queue.fal.run/fal-ai/ffmpeg-api/extract-frame",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ video_url: $('Calculate Segments').item.json.video_url, frame_type: 'middle' }) }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "ac5b56da-87ca-454b-a9d2-7992ceaa0b1e",
+      "name": "FAL Extract Peak Frame",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        0,
+        208
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "Mus4CDRMALrvfn2u",
+          "name": "FAL"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "id": "0f3e696a-e124-4da1-856d-b2b08a05cf07",
+      "name": "Wait 10s (Hook)",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        224,
+        0
+      ],
+      "webhookId": "f66bcbac-22e6-4b13-b8d5-fd603664b964"
+    },
+    {
+      "parameters": {},
+      "id": "563e391e-5e38-4ca8-821d-ee2bccc99ff6",
+      "name": "Wait 10s (Peak)",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        224,
+        208
+      ],
+      "webhookId": "ff026351-86f6-45ea-b407-82053a0da353"
+    },
+    {
+      "parameters": {
+        "url": "={{ $('FAL Extract Hook Frame').item.json.response_url }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 60000
+        }
+      },
+      "id": "bcd72e68-a731-4ab4-8034-d7800f8efc2e",
+      "name": "Poll Hook Frame",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        448,
+        0
+      ],
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "Mus4CDRMALrvfn2u",
+          "name": "FAL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "={{ $('FAL Extract Peak Frame').item.json.response_url }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 60000
+        }
+      },
+      "id": "d89030f4-9f6a-4561-867d-ae9e068eca92",
+      "name": "Poll Peak Frame",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        448,
+        208
+      ],
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "Mus4CDRMALrvfn2u",
+          "name": "FAL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "options": {}
+      },
+      "id": "85f2600b-72d1-4431-97df-b25ce929607d",
+      "name": "Merge Frame Data",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [
+        672,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "1",
+              "name": "hook_frame_url",
+              "value": "={{ $('Poll Hook Frame').item.json.images[0].url }}",
+              "type": "string"
+            },
+            {
+              "id": "2",
+              "name": "peak_frame_url",
+              "value": "={{ $('Poll Peak Frame').item.json.images[0].url }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "cdaa4392-accb-4f07-9c79-8aeeb1dae65c",
+      "name": "Set Frame URLs",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        880,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Combine all analysis data for SYNTHESIZER\nconst analysis = $('Parse Full Analysis').item.json;\nconst frames = items[0].json;\n\n// Merge segment data with segment analysis\nconst enrichedSegments = analysis.segments.map((seg, i) => {\n  const segmentAnalysis = analysis.segment_analysis[i] || {};\n  return {\n    ...seg,\n    ...segmentAnalysis,\n    // Override index to ensure consistency\n    index: i\n  };\n});\n\nreturn [{\n  json: {\n    // Core identifiers\n    video_id: analysis.video_id,\n    original_url: analysis.original_url,\n    author: analysis.author,\n    description: analysis.description,\n    \n    // Duration and segments\n    duration_seconds: analysis.duration_seconds,\n    segment_count: analysis.segment_count,\n    \n    // Analysis results\n    vibe_check: analysis.vibe_check,\n    character_bible: analysis.character_bible,\n    \n    // Enriched segments with both timing and analysis\n    segments: enrichedSegments,\n    \n    // Reference frames\n    reference_frames: {\n      hook: frames.hook_frame_url,\n      peak: frames.peak_frame_url\n    },\n    \n    // User configuration\n    archetype: analysis.archetype,\n    brand_color: analysis.brand_color,\n    \n    // Metadata\n    source: analysis.source,\n    ingested_at: analysis.ingested_at,\n    analyzed_at: new Date().toISOString()\n  }\n}];"
+      },
+      "id": "6f55bc5d-9358-44dd-878f-bff5be994a25",
+      "name": "Package Analysis Output",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1104,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "ISiFCpK5UOSS0Mp7",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/ISiFCpK5UOSS0Mp7",
+          "cachedResultName": "Viral Twin 2.0 - SYNTHESIZER"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "id": "3af1e138-1c8b-4feb-98e1-1f929002aef9",
+      "name": "Call Synthesizer",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        1328,
+        112
+      ]
+    }
+  ],
+  "pinData": {
+    "Gemini Full Video Analysis": [
+      {
+        "json": {
+          "id": "gen-1765228943-bdhdIoHGh1t8owsix8aG",
+          "provider": "Google",
+          "model": "google/gemini-2.5-flash-preview-09-2025",
+          "object": "chat.completion",
+          "created": 1765228944,
+          "choices": [
+            {
+              "logprobs": null,
+              "finish_reason": "stop",
+              "native_finish_reason": "STOP",
+              "index": 0,
+              "message": {
+                "role": "assistant",
+                "content": "```json\n{\n  \"vibe_check\": {\n    \"audio_energy\": \"High-energy, slightly aggressive, fast-paced electronic/dubstep music with a dramatic, heavily processed male voiceover announcing the challenge. The audio creates a sense of urgency and high stakes, contrasting with the cute subject matter (the plushie).\",\n    \"pacing\": \"Fast. The video uses rapid cuts, text overlays, and quick transitions between different locations and camera angles to keep the viewer engaged and prevent boredom.\",\n    \"emotional_arc\": \"Intrigue (What is this challenge?) -> Excitement (The scale of the challenge: Burj Khalifa) -> Satisfaction/Anticipation (The first drop/progress is made). It triggers a sense of collective participation and curiosity about the outcome.\",\n    \"viral_hooks\": [\n      \"The 'Challenge' Hook: A clear, quantifiable goal (Burj Khalifa) tied to audience action (followers).\",\n      \"The 'Cute Contrast' Hook: A small, adorable plushie is subjected to a ridiculous, large-scale challenge.\",\n      \"The 'Progress Bar' Hook: Explicitly tracking progress (829,799mm left) creates a reason to return.\",\n      \"The 'Location Reveal' Hook: Traveling to famous landmarks (London, Dubai) adds visual interest and aspirational content.\",\n      \"The 'Gamification' Hook: The 'Damage/Bounce/Style' scoring system at the end adds a playful, competitive element.\"\n    ],\n    \"tone\": \"Playful, highly engaging, challenge-based, and slightly absurd/comedic.\"\n  },\n  \"character_bible\": {\n    \"subject_type\": \"person/hands-only/object/scene/product\",\n    \"physical_description\": \"The Operator should be a male, mid-30s, with a clean, sharp appearance. Well-groomed hair (short, neat cut). Focus on hands and intentional movements rather than facial expressions.\",\n    \"clothing_style\": \"Minimalist, high-quality, dark clothing. Think charcoal grey or navy tailored blazer/jacket over a plain, high-quality t-shirt or turtleneck. No visible logos. The focus is on texture and fit.\",\n    \"distinguishing_features\": \"A high-end, minimalist watch (e.g., matte black or stainless steel). Clean, manicured hands.\",\n    \"environment\": {\n      \"setting_type\": \"Urban/Architectural. The initial setting is London (Big Ben), transitioning to Dubai (Burj Khalifa).\",\n      \"key_elements\": \"Iconic, recognizable global landmarks. Clean, well-maintained urban infrastructure (sidewalks, stone ledges).\",\n      \"lighting\": \"Clear, bright daylight (golden hour preferred for warmth and quality). Soft shadows, high contrast on the architecture.\",\n      \"color_palette\": \"Dominantly cool blues and greys (sky, stone) contrasted by the bright yellow/green of the plushie and the Brand Color accents.\"\n    },\n    \"archetype_application\": \"The Operator's energy is applied by making the movements precise and deliberate. When holding the plushie, the grip is firm and controlled. The voiceover (if used) should be calm, measured, and authoritative, contrasting the original video's frantic energy. The focus is on the *process* and the *measurement* (competence) rather than the spectacle (flashiness).\",\n    \"brand_integration\": \"Use #10B981 (a vibrant teal/green) for the text outlines, measurement lines (ruler), and subtle graphic elements (like the arrow pointing to the Burj Khalifa tip). The plushie's green leaf provides a natural color tie-in.\",\n    \"consistency_anchors\": [\n      \"The plushie (Emy) must look identical (bright yellow, green leaf, large black eyes).\",\n      \"The Operator's hands must have the same skin tone and appearance.\",\n      \"The measurement tool (ruler) must be consistently used and clearly marked.\",\n      \"The background locations must be instantly recognizable (Big Ben, Burj Khalifa).\",\n      \"The text overlay style (bold, white text with #10B981 outline) must be uniform.\",\n      \"The concept of '1mm per follower' must be stated clearly.\",\n      \"The 'Damage/Bounce/Style' scoring graphic must appear at the end.\"\n    ]\n  },\n  \"segments\": [\n    {\n      \"index\": 0,\n      \"time_range\": \"0:00 - 0:10\",\n      \"description\": \"Introduction of the challenge, the subject (Emy), and the goal. Starts with the plushie held up against Big Ben, transitions to an overhead shot showing the plushie above traffic, then cuts to the Burj Khalifa reveal, and finally shows the TikTok profile tracking the first follower.\",\n      \"camera\": \"Segment 1 uses a mix: Low angle (plushie against Big Ben), high angle/drone shot (plushie over traffic), wide establishing shot (Burj Khalifa), and screen recording (TikTok profile).\",\n      \"focal_point\": \"The plushie and the text overlays defining the rules and the goal (Burj Khalifa).\",\n      \"motion_description\": \"Slow, deliberate pan up from the plushie to Big Ben. Quick, smooth transition to the overhead shot. Static, majestic shot of the Burj Khalifa. Screen recording animation showing the follower count increasing from 0 to 1 with confetti effect.\",\n      \"key_frame_description\": \"Medium shot of the Operator's hand (wearing a dark sleeve) holding the bright yellow plushie against a clear blue sky, with the top of Big Ben centered in the background. Text overlay: 'DAY 1 OF DROPPING EMY'.\"\n    },\n    {\n      \"index\": 1,\n      \"time_range\": \"0:10 - 0:20\",\n      \"description\": \"The execution of the first drop (1mm). Shows the measurement (ruler), the plushie being placed on the ledge, the drop itself, and the final scoring screen. This segment validates the challenge and provides the immediate payoff.\",\n      \"camera\": \"Close-up, low angle. Focus is on the stone ledge and the plushie. The ruler shot is an extreme close-up to emphasize the 1mm measurement.\",\n      \"focal_point\": \"The ruler confirming the 1mm distance, and the plushie's reaction to the drop.\",\n      \"motion_description\": \"Quick zoom-in on the ruler marking 1mm. Slow-motion drop of the plushie onto the cardboard/stone ledge. The plushie rolls slightly forward. Static shot of the final scoring overlay appearing over the plushie.\",\n      \"key_frame_description\": \"Extreme close-up shot of a blue ruler placed on a rough stone surface, clearly showing the 1mm mark. The text overlay reads: '1 FOLLOWER = 1MM'. This is immediately followed by the plushie resting on the ledge, ready for the drop, with Big Ben visible in the blurred background.\"\n    }\n  ]\n}\n```",
+                "refusal": null,
+                "reasoning": null
+              }
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 4937,
+            "completion_tokens": 1544,
+            "total_tokens": 6481,
+            "cost": 0.0055861,
+            "is_byok": false,
+            "prompt_tokens_details": {
+              "cached_tokens": 0,
+              "audio_tokens": 350,
+              "video_tokens": 3870
+            },
+            "cost_details": {
+              "upstream_inference_cost": null,
+              "upstream_inference_prompt_cost": 0.0017261,
+              "upstream_inference_completions_cost": 0.00386
+            },
+            "completion_tokens_details": {
+              "reasoning_tokens": 0,
+              "image_tokens": 0
+            }
+          }
+        }
+      }
+    ]
+  },
+  "connections": {
+    "Receive Video Data": {
+      "main": [
+        [
+          {
+            "node": "Calculate Segments",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calculate Segments": {
+      "main": [
+        [
+          {
+            "node": "Download Video",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download Video": {
+      "main": [
+        [
+          {
+            "node": "Convert to Base64",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Convert to Base64": {
+      "main": [
+        [
+          {
+            "node": "Gemini Full Video Analysis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini Full Video Analysis": {
+      "main": [
+        [
+          {
+            "node": "Parse Full Analysis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Full Analysis": {
+      "main": [
+        [
+          {
+            "node": "FAL Extract Hook Frame",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "FAL Extract Peak Frame",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "FAL Extract Hook Frame": {
+      "main": [
+        [
+          {
+            "node": "Wait 10s (Hook)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "FAL Extract Peak Frame": {
+      "main": [
+        [
+          {
+            "node": "Wait 10s (Peak)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait 10s (Hook)": {
+      "main": [
+        [
+          {
+            "node": "Poll Hook Frame",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait 10s (Peak)": {
+      "main": [
+        [
+          {
+            "node": "Poll Peak Frame",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Poll Hook Frame": {
+      "main": [
+        [
+          {
+            "node": "Merge Frame Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Poll Peak Frame": {
+      "main": [
+        [
+          {
+            "node": "Merge Frame Data",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge Frame Data": {
+      "main": [
+        [
+          {
+            "node": "Set Frame URLs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Frame URLs": {
+      "main": [
+        [
+          {
+            "node": "Package Analysis Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Package Analysis Output": {
+      "main": [
+        [
+          {
+            "node": "Call Synthesizer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "4618db6a-320b-4ad3-8ff2-415c6b3706bf",
+  "meta": {
+    "instanceId": "5f21038f187f7ddf12e940bb55bc64eb117a28b98f8b5539845218f69f7a8aa9"
+  },
+  "id": "AwgeBhKAnMA61kBy",
+  "tags": []
+}

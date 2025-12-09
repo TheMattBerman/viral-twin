@@ -1,0 +1,481 @@
+{
+  "name": "Viral Twin 2.0 - LOGGER",
+  "nodes": [
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "id": "2bcc70c2-19cc-4202-a719-c8d2183d5f15",
+      "name": "Receive Final Data",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -48,
+        288
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = items[0].json;\n\n// Extract clip URLs if available\nconst clips = data.clips || [];\nconst clipUrls = clips.map(c => c.video_url).filter(Boolean);\n\n// Extract virality hooks from vibe_check\nconst vibeCheck = data.vibe_check || {};\nconst viralHooks = vibeCheck.viral_hooks || [];\nconst viralityReason = Array.isArray(viralHooks) ? viralHooks.join('; ') : (viralHooks || '');\n\n// Format for Google Sheet\nreturn [{\n  json: {\n    // Core identifiers\n    video_id: data.video_id || '',\n    timestamp: new Date().toISOString(),\n    \n    // Original TikTok data\n    original_url: data.original_url || '',\n    author: data.author || '',\n    description: data.description || '',\n    \n    // Analysis\n    virality_reason: viralityReason,\n    audio_energy: vibeCheck.audio_energy || '',\n    pacing: vibeCheck.pacing || '',\n    tone: vibeCheck.tone || '',\n    \n    // Status\n    status: data.stitch_status || data.status || 'unknown',\n    \n    // Final video\n    final_video_url: data.final_video_url || '',\n    drive_url: data.drive_url || '',\n    drive_download_url: data.drive_download_url || '',\n    total_duration: data.total_duration_seconds || 0,\n    \n    // Segment info\n    clip_count: data.clip_count || clipUrls.length || 0,\n    segment_1_url: clipUrls[0] || '',\n    segment_2_url: clipUrls[1] || '',\n    segment_3_url: clipUrls[2] || '',\n    segment_4_url: clipUrls[3] || '',\n    segment_5_url: clipUrls[4] || '',\n    segment_6_url: clipUrls[5] || '',\n    \n    // All clips as JSON (for reference)\n    all_clips_json: JSON.stringify(clips),\n    \n    // Archetype and brand\n    archetype: data.archetype?.name || data.archetype || 'Operator',\n    brand_color: data.brand_color || '#10B981',\n    \n    // Character bible summary\n    character_bible_json: JSON.stringify(data.character_bible || {}),\n    \n    // Timestamps\n    stitched_at: data.stitched_at || new Date().toISOString()\n  }\n}];"
+      },
+      "id": "0d82c7e5-ba8a-4e97-91b6-2deb39463529",
+      "name": "Prepare Sheet Row",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        192,
+        288
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1Tk5CsizRls8bZmeFfAm2fxbUMMQR82a_mKfjcOk0C1o",
+          "mode": "list",
+          "cachedResultName": "Viral Twin",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1Tk5CsizRls8bZmeFfAm2fxbUMMQR82a_mKfjcOk0C1o/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Viral_Twin_Log",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1Tk5CsizRls8bZmeFfAm2fxbUMMQR82a_mKfjcOk0C1o/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "video_id",
+              "displayName": "video_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "original_url",
+              "displayName": "original_url",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "virality_reason",
+              "displayName": "virality_reason",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "virality_mechanism",
+              "displayName": "virality_mechanism",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "audio_profile",
+              "displayName": "audio_profile",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "hook_element",
+              "displayName": "hook_element",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "peak_element",
+              "displayName": "peak_element",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "hook_frame_url",
+              "displayName": "hook_frame_url",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "peak_frame_url",
+              "displayName": "peak_frame_url",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "seed_image_url",
+              "displayName": "seed_image_url",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "final_video_url",
+              "displayName": "final_video_url",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "image_prompt",
+              "displayName": "image_prompt",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "video_motion_prompt",
+              "displayName": "video_motion_prompt",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "preservation_notes",
+              "displayName": "preservation_notes",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "elevation_notes",
+              "displayName": "elevation_notes",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "created_at",
+              "displayName": "created_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "timestamp",
+              "displayName": "timestamp",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "total_duration",
+              "displayName": "total_duration",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "clip_count",
+              "displayName": "clip_count",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "segment_1_url",
+              "displayName": "segment_1_url",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "segment_2_url",
+              "displayName": "segment_2_url",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "segment_3_url",
+              "displayName": "segment_3_url",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "segment_4_url",
+              "displayName": "segment_4_url",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "segment_5_url",
+              "displayName": "segment_5_url",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "segment_6_url",
+              "displayName": "segment_6_url",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "all_clips_json",
+              "displayName": "all_clips_json",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "archetype",
+              "displayName": "archetype",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "brand_color",
+              "displayName": "brand_color",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "character_bible_json",
+              "displayName": "character_bible_json",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "stitched_at",
+              "displayName": "stitched_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "author",
+              "displayName": "author",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "description",
+              "displayName": "description",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "audio_energy",
+              "displayName": "audio_energy",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "pacing",
+              "displayName": "pacing",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "tone",
+              "displayName": "tone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "drive_url",
+              "displayName": "drive_url",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "drive_download_url",
+              "displayName": "drive_download_url",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "8d4e06e6-68c4-42ff-90d7-dbc2f4c00513",
+      "name": "Append to Google Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        400,
+        288
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "7rou2y9XeyGHdBO0",
+          "name": "Google Sheets account matthew@emerald"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "id": "5341d855-0703-4fdd-8c38-8ba5de2d170c",
+      "name": "Done",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        624,
+        288
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Receive Final Data": {
+      "main": [
+        [
+          {
+            "node": "Prepare Sheet Row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Sheet Row": {
+      "main": [
+        [
+          {
+            "node": "Append to Google Sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append to Google Sheet": {
+      "main": [
+        [
+          {
+            "node": "Done",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "65a1938c-d87b-49ec-9e75-88e3797a6d81",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "5f21038f187f7ddf12e940bb55bc64eb117a28b98f8b5539845218f69f7a8aa9"
+  },
+  "id": "7VStPBFKVoALo7bA",
+  "tags": []
+}

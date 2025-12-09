@@ -1,0 +1,641 @@
+{
+  "name": "Viral Twin 2.0 - SYNTHESIZER",
+  "nodes": [
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "id": "c561f9f8-173b-4789-b8b0-c0a599801505",
+      "name": "Receive Analysis Data",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -944,
+        288
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Convert segments array into individual items for looping\nconst input = items[0].json;\nconst segments = input.segments || [];\n\n// Create one item per segment, each carrying full context\nreturn segments.map(segment => ({\n  json: {\n    // Segment-specific data\n    segment: segment,\n    segment_index: segment.index,\n    \n    // Shared context for all segments\n    video_id: input.video_id,\n    character_bible: input.character_bible,\n    vibe_check: input.vibe_check,\n    archetype: input.archetype,\n    brand_color: input.brand_color,\n    reference_frames: input.reference_frames,\n    segment_count: input.segment_count,\n    \n    // Original metadata\n    original_url: input.original_url,\n    author: input.author,\n    description: input.description\n  }\n}));"
+      },
+      "id": "f5ac8364-72c1-4466-8bb1-541f205db6d9",
+      "name": "Split Into Segments",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -720,
+        288
+      ]
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "2292b438-f086-44ce-8ed4-1b1f732c4832",
+      "name": "Loop Over Segments",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        -496,
+        288
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://openrouter.ai/api/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "HTTP-Referer",
+              "value": "https://emeralddigital.dev"
+            },
+            {
+              "name": "X-Title",
+              "value": "Viral Twin Synthesizer"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: 'google/gemini-2.5-flash-preview-09-2025', messages: [{ role: 'system', content: 'ROLE: Viral Psychology Preservation Specialist\\n\\nTASK: Create an image generation prompt for SEGMENT ' + ($json.segment_index + 1) + ' of ' + $json.segment_count + '.\\n\\nThis image will be the starting frame for a 10-second video clip. It must:\\n1. Match the CHARACTER BIBLE exactly for consistency\\n2. Capture the key moment described in the segment analysis\\n3. Apply the ' + $json.archetype.name + ' archetype subtly\\n\\nCHARACTER BIBLE (MUST FOLLOW EXACTLY):\\n' + JSON.stringify($json.character_bible) + '\\n\\nSEGMENT ANALYSIS FROM ORIGINAL VIDEO:\\nTime Range: ' + ($json.segment.time_range || $json.segment.timestamp_range || 'N/A') + '\\nDescription: ' + ($json.segment.description || 'Scene continuation') + '\\nCamera: ' + ($json.segment.camera || 'Maintain previous angle') + '\\nFocal Point: ' + ($json.segment.focal_point || 'Subject') + '\\nKey Frame Description: ' + ($json.segment.key_frame_description || $json.segment.description || 'Continue scene') + '\\nMOTION FROM ORIGINAL: ' + ($json.segment.motion_description || 'Natural movement matching the scene') + '\\n\\nLOCATION CONSISTENCY RULES:\\n- EVERY segment must show the EXACT SAME physical location from character_bible.environment\\n- Copy the setting_type, key_elements, lighting, color_palette exactly\\n- The background/environment should be identical across all segments\\n\\nOUTPUT FORMAT (JSON):\\n{\\n  \"image_prompt\": \"Start with the exact environment from character bible (setting_type + key_elements + lighting). Then add: the specific camera angle and framing for this segment, character positioning matching the key_frame_description. 150-250 words. Be specific and cinematic.\",\\n  \"video_motion_prompt\": \"RECREATE THE ORIGINAL MOTION: Based on the motion_description above, describe the dynamic movement for this 10-second clip. Include: subject actions and gestures, camera movement (pan/tilt/zoom/track if any), environmental motion. Be SPECIFIC and DYNAMIC - match the energy of the original. 50-100 words.\",\\n  \"consistency_check\": \"List the environment details that anchor this to the same location as other segments\"\\n}\\n\\nReturn ONLY valid JSON.' }, { role: 'user', content: 'Generate the image and motion prompts for segment ' + ($json.segment_index + 1) + '. The motion should match the original video energy - not be slow or static unless the original was.' }], max_tokens: 1500, temperature: 0.4 }) }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "0143de90-a22a-4777-be5c-14f223bb07df",
+      "name": "Generate Image Prompt",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -272,
+        288
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "FoHuYOrModyYssj3",
+          "name": "OpenRouter"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const prevData = $('Loop Over Segments').item.json;\nconst response = $json;\n\nlet prompts;\ntry {\n  const content = response.choices[0].message.content;\n  const cleaned = content.replace(/```json\\n?|```\\n?/g, '').trim();\n  prompts = JSON.parse(cleaned);\n} catch (e) {\n  // Fallback prompts if parsing fails - use segment data\n  const segment = prevData.segment || {};\n  prompts = {\n    image_prompt: `Photorealistic image of ${prevData.character_bible?.physical_description || 'a person'} in ${prevData.character_bible?.environment?.setting_type || 'a room'}. ${segment.key_frame_description || segment.description || 'Natural pose'}. Professional photography, cinematic lighting, vertical 9:16 format.`,\n    video_motion_prompt: segment.motion_description || 'Dynamic natural movement with expressive gestures. Camera follows the action smoothly.',\n    consistency_check: ['Using fallback prompt with segment data']\n  };\n}\n\nreturn {\n  json: {\n    ...prevData,\n    synthesis: prompts\n  }\n};"
+      },
+      "id": "c5c323af-c68a-487a-bc6a-a472a65dcbd6",
+      "name": "Parse Image Prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -64,
+        288
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://queue.fal.run/fal-ai/nano-banana-pro",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ prompt: $json.synthesis.image_prompt + ' Style: photorealistic, cinematic, high quality.', aspect_ratio: '9:16', resolution: '1K', num_images: 1, output_format: 'jpeg' }) }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 120000
+        }
+      },
+      "id": "d146600c-c027-441d-befa-fb47cf0d3f8e",
+      "name": "Generate Seed Image",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        176,
+        288
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "Mus4CDRMALrvfn2u",
+          "name": "FAL"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "id": "246f7bb1-97e6-47e9-b88f-bd8eec386182",
+      "name": "Wait 15s for Image",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        384,
+        288
+      ],
+      "webhookId": "16a02ec5-fa00-4c28-87bb-9528fdf6a02b"
+    },
+    {
+      "parameters": {
+        "url": "={{ $('Generate Seed Image').item.json.response_url }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 60000
+        }
+      },
+      "id": "15291c01-9e62-46ea-8f4a-9b7068439498",
+      "name": "Poll Image Status",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        608,
+        288
+      ],
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "Mus4CDRMALrvfn2u",
+          "name": "FAL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const prevData = $('Parse Image Prompt').item.json;\nconst response = $json;\n\n// FAL returns URLs at images[0].url\nlet imageUrl = '';\n\ntry {\n  if (response.images && response.images[0]) {\n    imageUrl = response.images[0].url;\n  } else if (response.image && response.image.url) {\n    imageUrl = response.image.url;\n  } else if (response.output && response.output[0]) {\n    imageUrl = response.output[0];\n  }\n} catch (e) {\n  console.log('Error extracting image URL:', e.message);\n}\n\nreturn {\n  json: {\n    ...prevData,\n    seed_image_url: imageUrl\n  }\n};"
+      },
+      "id": "f18f38c9-6685-4dc2-8ed7-1b74e536d87d",
+      "name": "Extract Image URL",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        832,
+        288
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://queue.fal.run/fal-ai/kling-video/v2.6/pro/image-to-video",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ image_url: $json.seed_image_url, prompt: $json.synthesis.video_motion_prompt, duration: '10', aspect_ratio: '9:16', cfg_scale: 0.5 }) }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "99985635-7b3d-4967-9fbe-91d21614008d",
+      "name": "Kling Submit Video",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1056,
+        288
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "Mus4CDRMALrvfn2u",
+          "name": "FAL"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "id": "03e6f144-f639-466f-9d67-06e705b9b542",
+      "name": "Wait 120s for Video",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        1264,
+        288
+      ],
+      "webhookId": "f43dbb3c-43ee-44f6-9f96-8c96274a547c"
+    },
+    {
+      "parameters": {
+        "url": "={{ $('Kling Submit Video').item.json.response_url }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 60000
+        }
+      },
+      "id": "a2111e09-628b-47ea-8999-970e63b89713",
+      "name": "Poll Video Status",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1488,
+        288
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "Mus4CDRMALrvfn2u",
+          "name": "FAL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "version": 2,
+            "caseSensitive": true
+          },
+          "combinator": "or",
+          "conditions": [
+            {
+              "id": "1",
+              "operator": {
+                "type": "string",
+                "operation": "exists",
+                "singleValue": true
+              },
+              "leftValue": "={{ $json.video?.url }}"
+            },
+            {
+              "id": "2",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              },
+              "leftValue": "={{ $json.status }}",
+              "rightValue": "COMPLETED"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "5c6ae072-bb2e-4d66-b525-3a5e2a609a92",
+      "name": "Video Done?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1712,
+        288
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "ac2f623f-6216-4a37-ab25-a39d53b2173a",
+      "name": "Wait 90s More",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        1936,
+        432
+      ],
+      "webhookId": "c3576d62-c31c-42c0-9185-d4782044ad0d"
+    },
+    {
+      "parameters": {
+        "url": "={{ $('Kling Submit Video').item.json.response_url }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 60000
+        }
+      },
+      "id": "d4a8fda7-d468-404f-a9d1-7acfb2b4e07b",
+      "name": "Poll Video Again",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2144,
+        432
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "Mus4CDRMALrvfn2u",
+          "name": "FAL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Video result comes from the current node (after Video Done? check)\nconst videoResult = $json;\n// Segment data from earlier in the loop (contains all original context)\nconst segmentData = $('Extract Image URL').item.json;\n\n// Extract video URL from FAL response\nlet videoUrl = '';\nif (videoResult.video?.url) {\n  videoUrl = videoResult.video.url;\n} else if (videoResult.url) {\n  videoUrl = videoResult.url;\n}\n\nreturn {\n  json: {\n    // Clip-specific data\n    segment_index: segmentData.segment_index,\n    video_url: videoUrl,\n    image_url: segmentData.seed_image_url,\n    status: videoUrl ? 'success' : 'failed',\n    \n    // Pass through original data (for first clip to carry to aggregate)\n    video_id: segmentData.video_id,\n    segment_count: segmentData.segment_count,\n    original_url: segmentData.original_url,\n    author: segmentData.author,\n    description: segmentData.description,\n    vibe_check: segmentData.vibe_check,\n    character_bible: segmentData.character_bible,\n    archetype: segmentData.archetype,\n    brand_color: segmentData.brand_color\n  }\n};"
+      },
+      "id": "bcfb3819-12fd-4a85-b295-a563091141d2",
+      "name": "Package Clip Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2592,
+        336
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "ef23e797-861f-47d0-92fd-fe5c5cefd87f",
+      "name": "Back to Loop",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        2816,
+        336
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Collect all clip results from the loop context\nconst clips = items.map(item => item.json);\n\n// Get original data from the first segment (carries all shared context)\nconst firstSegmentData = clips[0] || {};\n\n// Sort by segment index\nclips.sort((a, b) => a.segment_index - b.segment_index);\n\n// Extract successful video URLs in order\nconst videoUrls = clips\n  .filter(clip => clip.status === 'success' && clip.video_url)\n  .map(clip => clip.video_url);\n\nconst successfulClips = clips.filter(c => c.status === 'success').length;\nconst failedClips = clips.filter(c => c.status === 'failed').length;\n\nreturn [{\n  json: {\n    // Core identifiers\n    video_id: firstSegmentData.video_id || 'unknown',\n    \n    // Original TikTok data (passed through from segments)\n    original_url: firstSegmentData.original_url || '',\n    author: firstSegmentData.author || '',\n    description: firstSegmentData.description || '',\n    \n    // Analysis data\n    vibe_check: firstSegmentData.vibe_check || {},\n    character_bible: firstSegmentData.character_bible || {},\n    archetype: firstSegmentData.archetype || {},\n    brand_color: firstSegmentData.brand_color || '#10B981',\n    \n    // Clip data\n    video_urls: videoUrls,\n    clips: clips,\n    successful_clips: successfulClips,\n    failed_clips: failedClips,\n    total_segments: firstSegmentData.segment_count || clips.length,\n    ready_for_stitching: videoUrls.length > 0\n  }\n}];"
+      },
+      "id": "78be5219-7ece-45ec-b14d-39728f943e91",
+      "name": "Aggregate All Clips",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -272,
+        480
+      ]
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "OZXs4K8Y049NijJQ",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/OZXs4K8Y049NijJQ",
+          "cachedResultName": "Viral Twin 2.0 - STITCHER"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "id": "b9ee6e90-93d1-4b3c-8e34-d9d5a54c4067",
+      "name": "Call Stitcher",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        -64,
+        480
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Receive Analysis Data": {
+      "main": [
+        [
+          {
+            "node": "Split Into Segments",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Into Segments": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Segments",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Segments": {
+      "main": [
+        [
+          {
+            "node": "Aggregate All Clips",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Generate Image Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Image Prompt": {
+      "main": [
+        [
+          {
+            "node": "Parse Image Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Image Prompt": {
+      "main": [
+        [
+          {
+            "node": "Generate Seed Image",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Seed Image": {
+      "main": [
+        [
+          {
+            "node": "Wait 15s for Image",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait 15s for Image": {
+      "main": [
+        [
+          {
+            "node": "Poll Image Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Poll Image Status": {
+      "main": [
+        [
+          {
+            "node": "Extract Image URL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Image URL": {
+      "main": [
+        [
+          {
+            "node": "Kling Submit Video",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Kling Submit Video": {
+      "main": [
+        [
+          {
+            "node": "Wait 120s for Video",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait 120s for Video": {
+      "main": [
+        [
+          {
+            "node": "Poll Video Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Poll Video Status": {
+      "main": [
+        [
+          {
+            "node": "Video Done?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Video Done?": {
+      "main": [
+        [
+          {
+            "node": "Package Clip Data",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Wait 90s More",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait 90s More": {
+      "main": [
+        [
+          {
+            "node": "Poll Video Again",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Poll Video Again": {
+      "main": [
+        [
+          {
+            "node": "Video Done?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Package Clip Data": {
+      "main": [
+        [
+          {
+            "node": "Back to Loop",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Back to Loop": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Segments",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate All Clips": {
+      "main": [
+        [
+          {
+            "node": "Call Stitcher",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "f7ca8d74-2bd7-4b16-b815-3a50b2d56826",
+  "meta": {
+    "instanceId": "5f21038f187f7ddf12e940bb55bc64eb117a28b98f8b5539845218f69f7a8aa9"
+  },
+  "id": "ISiFCpK5UOSS0Mp7",
+  "tags": []
+}

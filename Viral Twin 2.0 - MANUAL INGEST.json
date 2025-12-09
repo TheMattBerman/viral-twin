@@ -1,0 +1,459 @@
+{
+  "name": "Viral Twin 2.0 - MANUAL INGEST",
+  "nodes": [
+    {
+      "parameters": {
+        "formTitle": "🎬 Viral Twin Generator",
+        "formDescription": "Transform any TikTok video into a branded twin that preserves the viral psychology while elevating the execution.<br><br>⏳ Processing takes 5-10 minutes depending on video length.<br>📊 Results appear in the Viral_Twin_Log Google Sheet.",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "TikTok Video URL",
+              "placeholder": "https://www.tiktok.com/@username/video/1234567890",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Character Archetype",
+              "fieldType": "dropdown",
+              "fieldOptions": {
+                "values": [
+                  {
+                    "option": "Operator - Calm competence, figured-it-out energy"
+                  },
+                  {
+                    "option": "Creator - Artistic energy, passionate authenticity"
+                  },
+                  {
+                    "option": "Educator - Authority with warmth, makes complex simple"
+                  },
+                  {
+                    "option": "Entertainer - High energy, magnetic presence"
+                  },
+                  {
+                    "option": "Custom - Define your own below"
+                  }
+                ]
+              },
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Custom Archetype Description",
+              "fieldType": "textarea",
+              "placeholder": "If you selected 'Custom' above, describe the energy, personality, and visual style you want. Example: 'Zen minimalist - serene presence, thoughtful pauses, clean aesthetic, speaks slowly with intention'"
+            },
+            {
+              "fieldLabel": "Brand Accent Color (optional)",
+              "placeholder": "#10B981 (default emerald green)"
+            }
+          ]
+        },
+        "options": {
+          "respondWithOptions": {
+            "values": {
+              "formSubmittedText": "✅ Video submitted! Processing has started.\n\n⏳ This takes 5-10 minutes depending on video length.\n📊 Check the Viral_Twin_Log sheet for results.\n\nYou can close this page."
+            }
+          }
+        }
+      },
+      "id": "7dc40cac-6c2a-404d-906a-76727ac3dae1",
+      "name": "TikTok URL Form",
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.2,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "viral-twin-form"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract form inputs\nconst tiktokUrl = items[0].json['TikTok Video URL'];\nconst archetypeRaw = items[0].json['Character Archetype'];\nconst customArchetype = items[0].json['Custom Archetype Description'] || '';\nconst brandColor = items[0].json['Brand Accent Color (optional)'] || '#10B981';\n\n// Parse archetype selection\nconst archetypeMap = {\n  'Operator': {\n    name: 'Operator',\n    description: 'Calm competence, direct presence. Someone who has figured things out. Anti-hustle energy.',\n    visual_cues: 'clean aesthetic, quality materials, intentional environment, direct eye contact',\n    energy: 'confident but not arrogant, knowledgeable but not preachy, successful but not flashy'\n  },\n  'Creator': {\n    name: 'Creator',\n    description: 'Artistic energy, creative chaos. Passion visible in every frame.',\n    visual_cues: 'creative workspace, tools of the trade visible, expressive gestures',\n    energy: 'enthusiastic, authentic, slightly messy but intentional'\n  },\n  'Educator': {\n    name: 'Educator',\n    description: 'Authority without pretension. Making complex simple.',\n    visual_cues: 'clean background, professional but approachable, clear focal point',\n    energy: 'patient, knowledgeable, warm, trustworthy'\n  },\n  'Entertainer': {\n    name: 'Entertainer',\n    description: 'High energy, magnetic presence. Born for the camera.',\n    visual_cues: 'dynamic poses, expressive face, engaging environment',\n    energy: 'charismatic, fun, slightly over-the-top but authentic'\n  }\n};\n\n// Determine which archetype was selected\nlet archetype;\nconst archetypeKey = archetypeRaw.split(' - ')[0];\n\nif (archetypeKey === 'Custom' && customArchetype) {\n  archetype = {\n    name: 'Custom',\n    description: customArchetype,\n    visual_cues: 'as described by user',\n    energy: 'as described by user'\n  };\n} else {\n  archetype = archetypeMap[archetypeKey] || archetypeMap['Operator'];\n}\n\n// Extract video_id from URL\nconst videoIdMatch = tiktokUrl.match(/video\\/(\\d+)/);\nconst videoId = videoIdMatch ? videoIdMatch[1] : Date.now().toString();\n\n// Clean brand color (ensure it has #)\nconst cleanBrandColor = brandColor.startsWith('#') ? brandColor : `#${brandColor}`;\n\nreturn [{\n  json: {\n    tiktok_url: tiktokUrl,\n    video_id: videoId,\n    archetype: archetype,\n    brand_color: cleanBrandColor,\n    submitted_at: new Date().toISOString()\n  }\n}];"
+      },
+      "id": "a1250e61-e772-4703-8a29-1fff073339ad",
+      "name": "Extract & Parse Inputs",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "version": 2,
+            "caseSensitive": true
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "1",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              },
+              "leftValue": "={{ $json.tiktok_url }}",
+              "rightValue": "tiktok.com"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "e1415385-4405-46d4-997b-3002bd810aad",
+      "name": "Validate URL",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        448,
+        0
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "6dae29e2-352c-4c43-928a-7dd0a1ee428c",
+      "name": "Invalid URL - End",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        1120,
+        224
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://api.scrapecreators.com/v2/tiktok/video",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "url",
+              "value": "={{ $('Validate URL').item.json.tiktok_url }}"
+            },
+            {
+              "name": "region",
+              "value": "US"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-api-key",
+              "value": "={{ $json.scrapecreators_api_key }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 30000
+        }
+      },
+      "id": "252815a2-5938-4898-908c-2dae33dfd385",
+      "name": "Fetch TikTok Data",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        992,
+        -16
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "version": 2,
+            "caseSensitive": true
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "1",
+              "operator": {
+                "type": "string",
+                "operation": "exists",
+                "singleValue": true
+              },
+              "leftValue": "={{ $json.aweme_detail?.video?.play_addr?.url_list?.[0] }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "7d7d2960-80bb-4674-ae12-a88860c593e6",
+      "name": "Video Found?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1248,
+        0
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "76504de9-7073-4d6f-a2e8-bd47d630b54a",
+      "name": "Not Found - End",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        1472,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "1",
+              "name": "video_id",
+              "value": "={{ $('Extract & Parse Inputs').item.json.video_id }}",
+              "type": "string"
+            },
+            {
+              "id": "2",
+              "name": "original_url",
+              "value": "={{ $('Extract & Parse Inputs').item.json.tiktok_url }}",
+              "type": "string"
+            },
+            {
+              "id": "3",
+              "name": "video_url",
+              "value": "={{ $json.aweme_detail?.video?.play_addr?.url_list?.[0] }}",
+              "type": "string"
+            },
+            {
+              "id": "4",
+              "name": "author",
+              "value": "={{ $json.aweme_detail?.author?.unique_id || $json.aweme_detail?.author?.nickname || 'unknown' }}",
+              "type": "string"
+            },
+            {
+              "id": "5",
+              "name": "description",
+              "value": "={{ $json.aweme_detail?.desc || '' }}",
+              "type": "string"
+            },
+            {
+              "id": "6",
+              "name": "stats",
+              "value": "={{ { plays: $json.aweme_detail?.statistics?.play_count, likes: $json.aweme_detail?.statistics?.digg_count, comments: $json.aweme_detail?.statistics?.comment_count, shares: $json.aweme_detail?.statistics?.share_count } }}",
+              "type": "object"
+            },
+            {
+              "id": "7",
+              "name": "duration_ms",
+              "value": "={{ $json.aweme_detail?.video?.duration || 0 }}",
+              "type": "number"
+            },
+            {
+              "id": "8",
+              "name": "duration_seconds",
+              "value": "={{ Math.round(($json.aweme_detail?.video?.duration || 0) / 1000) }}",
+              "type": "number"
+            },
+            {
+              "id": "9",
+              "name": "archetype",
+              "value": "={{ $('Extract & Parse Inputs').item.json.archetype }}",
+              "type": "object"
+            },
+            {
+              "id": "10",
+              "name": "brand_color",
+              "value": "={{ $('Extract & Parse Inputs').item.json.brand_color }}",
+              "type": "string"
+            },
+            {
+              "id": "11",
+              "name": "created_at",
+              "value": "={{ $json.aweme_detail?.create_time ? new Date($json.aweme_detail.create_time * 1000).toISOString() : $now.toISO() }}",
+              "type": "string"
+            },
+            {
+              "id": "12",
+              "name": "ingested_at",
+              "value": "={{ $now.toISO() }}",
+              "type": "string"
+            },
+            {
+              "id": "13",
+              "name": "source",
+              "value": "manual_form",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "930f51ad-c290-48e4-bbb7-7ea171c73ec4",
+      "name": "Prepare Video Data",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1472,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "AwgeBhKAnMA61kBy",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/AwgeBhKAnMA61kBy",
+          "cachedResultName": "Viral Twin 2.0 - ANALYZER"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "id": "cc7a842b-0a15-4b18-9cc7-c06bc7d1278c",
+      "name": "Call Analyzer",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        1696,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "23721081-61eb-4c44-8c51-64d7bd3b68a4",
+              "name": "scrapecreators_api_key",
+              "value": "your_scrapecreators_key",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        736,
+        -16
+      ],
+      "id": "d2b8bc7d-9b86-4e70-9ff2-7d2f6e438d68",
+      "name": "Config Settings"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "TikTok URL Form": {
+      "main": [
+        [
+          {
+            "node": "Extract & Parse Inputs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract & Parse Inputs": {
+      "main": [
+        [
+          {
+            "node": "Validate URL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate URL": {
+      "main": [
+        [
+          {
+            "node": "Config Settings",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Invalid URL - End",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch TikTok Data": {
+      "main": [
+        [
+          {
+            "node": "Video Found?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Video Found?": {
+      "main": [
+        [
+          {
+            "node": "Prepare Video Data",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Not Found - End",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Video Data": {
+      "main": [
+        [
+          {
+            "node": "Call Analyzer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Config Settings": {
+      "main": [
+        [
+          {
+            "node": "Fetch TikTok Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "a18911eb-edb0-4efb-b288-ca54ea4fabba",
+  "meta": {
+    "instanceId": "5f21038f187f7ddf12e940bb55bc64eb117a28b98f8b5539845218f69f7a8aa9"
+  },
+  "id": "xaRHwGTib9vXrWGm",
+  "tags": []
+}
